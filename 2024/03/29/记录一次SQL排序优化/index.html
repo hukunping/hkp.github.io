@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>记录一次SQL排序优化 | Hu的个人网站</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="场景：查询年龄为20岁，且ID编号小于10000的用户，且按名字排序 SQL： 1SELECT * FROM user WHERE age &#x3D; 20 AND ID&lt;1000 ORDER BY name;  使用explain，发现extra字段是filesort；type是all。 创建索引： 1INDEX idx_age_name ON user(age,name);  使用explain">
+<meta property="og:type" content="article">
+<meta property="og:title" content="记录一次SQL排序优化">
+<meta property="og:url" content="http://example.com/2024/03/29/%E8%AE%B0%E5%BD%95%E4%B8%80%E6%AC%A1SQL%E6%8E%92%E5%BA%8F%E4%BC%98%E5%8C%96/index.html">
+<meta property="og:site_name" content="Hu的个人网站">
+<meta property="og:description" content="场景：查询年龄为20岁，且ID编号小于10000的用户，且按名字排序 SQL： 1SELECT * FROM user WHERE age &#x3D; 20 AND ID&lt;1000 ORDER BY name;  使用explain，发现extra字段是filesort；type是all。 创建索引： 1INDEX idx_age_name ON user(age,name);  使用explain">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-03-29T05:00:06.267Z">
+<meta property="article:modified_time" content="2024-03-29T05:36:24.801Z">
+<meta property="article:author" content="胡坤平">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="../../../../atom.xml" title="Hu的个人网站" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="../../../../favicon.png">
+  
+  
+  
+<link rel="stylesheet" href="../../../../css/style.css">
+
+  
+    
+<link rel="stylesheet" href="../../../../fancybox/jquery.fancybox.min.css">
+
+  
+  
+<meta name="generator" content="Hexo 7.1.1"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <!-- <h1 id="logo-wrap">
+        <a href="../../../../index.html" id="logo">Hu的个人网站</a>
+      </h1> -->
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"><span class="fa fa-bars" ><p style="font-size: 20px;">☰</p></span></a>
+        
+          <a class="main-nav-link" href="../../../../archives">主页</a>
+        
+          <a class="main-nav-link" href="../../../../about">摄影</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+        
+          <a class="nav-icon" href="../../../../atom.xml" title="RSS 订阅"><span class="fa fa-rss"></span></a>
+        
+        <a class="nav-icon nav-search-btn" title="搜索"><span class="fa fa-search"></span></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="搜索"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://example.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-记录一次SQL排序优化" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <!-- <a href="" class="article-date">
+  <time class="dt-published" datetime="2024-03-29T05:00:06.267Z" itemprop="datePublished">2024-03-29</time>
+</a> -->
+    
+        <a href="" class="article-date">
+  <time class="dt-published" datetime="2024-03-29T05:00:06.267Z" itemprop="datePublished">2024-03-29</time>
+</a>
+        <!--首页文章日期后面不显示分类-->
+    
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      记录一次SQL排序优化
+    </h1>
+  
+
+      </header>
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <p><strong>场景：查询年龄为20岁，且ID编号小于10000的用户，且按名字排序</strong></p>
+<p>SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> <span class="keyword">user</span> <span class="keyword">WHERE</span> age <span class="operator">=</span> <span class="number">20</span> <span class="keyword">AND</span> ID<span class="operator">&lt;</span><span class="number">1000</span> <span class="keyword">ORDER</span> <span class="keyword">BY</span> name;</span><br></pre></td></tr></table></figure>
+
+<p>使用explain，发现extra字段是filesort；type是all。</p>
+<p>创建索引：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INDEX idx_age_name <span class="keyword">ON</span> <span class="keyword">user</span>(age,name);</span><br></pre></td></tr></table></figure>
+
+<p>使用explain，extra字段是index；type是index，key_len是5，只是用到了age。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INDEX idx_age_name <span class="keyword">ON</span> <span class="keyword">user</span>(age,ID,name);</span><br></pre></td></tr></table></figure>
+
+<p>虽然使用的是filesort，但是性能居然0.002比方案一0.039更快.</p>
+<p>出现了filesort的速度比index快；</p>
+<p>分析：</p>
+<p>所有的排序都是条件过滤之后执行的，如果条件过滤掉大部分数据，剩下的几百条，几千条数据进行filesort也不会太消耗性能；相对于ID&lt;1000这个条件，如果ID没有索引，要对上万条数据进行扫描，非常消耗性能。所以把索引放在这个字段上性价比最高。</p>
+<p>结论：</p>
+<p><strong>当范围条件和（group by或者order by）的字段二选一时，优先观察条件字段的过滤数量，如果过滤的数量足够多，而需要排序的数据不够多时，优先把索引放在范围字段上，反之亦然（ID&gt;1000）。</strong></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      
+      
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="../../20/G1%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%99%A8%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">后一篇</strong>
+      <div class="article-nav-title">G1垃圾回收器底层原理</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">分类</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="../../../../categories/Java/">Java</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="../../../../archives/2024/03/">三月 2024</a></li><li class="archive-list-item"><a class="archive-list-link" href="../../../../archives/2021/01/">一月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="../../../../archives/2020/03/">三月 2020</a></li></ul>
+    </div>
+  </div>
+
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      <!-- 
+      &copy; 2024 胡坤平<br> -->
+      Gitee: <a href="https://gitee.com/hu-kunping" target="_blank">https://gitee.com/hu-kunping</a><br>
+      GitHub: <a href="https://github.com/hukunping" target="_blank">https://github.com/hukunping/</a>
+    </div>
+  </div>
+</footer>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="../../../../archives" class="mobile-nav-link">主页</a>
+  
+    <a href="../../../../about" class="mobile-nav-link">摄影</a>
+  
+</nav>
+    
+
+
+<script src="../../../../js/jquery-3.6.4.min.js"></script>
+
+
+
+  
+<script src="../../../../fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="../../../../js/script.js"></script>
+
+
+
+
+
+  </div>
+</body>
+</html>
